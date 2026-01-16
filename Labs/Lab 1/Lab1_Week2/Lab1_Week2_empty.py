@@ -1,67 +1,57 @@
 # Import required libraries
-import pandas as pd 
+import pandas as pd
 import spacy
 from spacy.matcher import Matcher
 import requests
 
-#INS. COMM. Observe the default natural language processing (NLP) pipeline
+# INS. COMM. Create a blank English NLP pipeline
 nlp = spacy.blank("en")
-print("Pipeline components:", nlp.pipe_names) #INS. COMM. Tokenizer is always available (even if the output shows blank)
 
-#INS. COMM. HINT: Use the built-in add_pipe(...) command, which is a method of the Language object created by spacy.blank("en")
-#INS. COMM. HINT: You can use the built-in pipe_names command (a method of the Language object created by spacy.blank("en")) to view the current NLP pipeline
-#INS. COMM. GOAL: Add in the following components of the NLP pipeline
+print("Pipeline components before adding anything:", nlp.pipe_names)
 
-#NOTE: Source had to be included for add_pipe, otherwise code throws initialization errors for added pipeline components
-source_nlp = spacy.load("en_core_web_sm")
+# INS. COMM. Add untrained components
+tagger = nlp.add_pipe("tagger")
+parser = nlp.add_pipe("parser")
+ner = nlp.add_pipe("ner")
 
-#INS. COMM.        - PoS-tagging
-nlp.add_pipe("tagger", source=source_nlp)
-#INS. COMM.        - Parser
-nlp.add_pipe("parser", source=source_nlp)
-#INS. COMM.        - Named-entity recognition
-nlp.add_pipe("ner", source=source_nlp)
+print("Pipeline components after adding pipes:", nlp.pipe_names)
+print()
+
+#NOTE: Added dummy labels so spaCy will not crash
+tagger.add_label("NOUN")
+parser.add_label("dep")
+ner.add_label("PERSON")
+
+#NOTE: Added initialize so spacy will not crash
+nlp.initialize()
 
 text = "On a foggy Tuesday morning, Eleanor Whitmore met Daniel Alvarez outside the old Briarwood Train Station in Portsmouth, New Hampshire, clutching a leather-bound notebook and a chipped blue ceramic mug."
 doc = nlp(text)
 
-#INS. COMM. GOAL: Test each component and observe their results (if the results are blank, then please explain why). The following components you are considering are:
-#INS. COMM.        - Tokenization
-tokens = []
-for token in doc:
-    tokens.append(token)
-print("Tokenization Results: ")
+# INS. COMM. Tokenization
+tokens = [token.text for token in doc]
+print("Tokenization Results:")
 print(tokens)
 print()
 
-#INS. COMM.        - PoS-tagging
-# token.pos__ prints blank because spacy.blank("en") is a blank model 
-# with no POS library to reference for different speech part types
-pos_tokens = []
-for token in doc:
-    pos_tokens.append(f"{token}: {token.pos_}")
-print("POS Results: ")
+# INS. COMM. POS tagging 
+pos_tokens = [f"{token.text}: {token.pos_}" for token in doc]
+print("POS Results:")
 print(pos_tokens)
 print()
 
-#INS. COMM.        - Parsing
-# Parser fails to correctly parse the tokens due to the empty model 
-# lacking the vocabulary normally provided to the parser by a pre-trained model such as en_core_web_sm
-# resulting in most tokens being incorrectly identified as conj
-parsed_tokens = []
-for token in doc:
-    parsed_tokens.append(f"{token}: {token.tag_}, {token.dep_}")
-print("Parsing Results: ")
+# INS. COMM. Dependency parsing 
+parsed_tokens = [f"{token.text}: {token.tag_}, {token.dep_}" for token in doc]
+print("Parsing Results:")
 print(parsed_tokens)
 print()
 
-#INS. COMM.        - Named-Entity Recognition
-ner_tokens = []
-for ent in doc.ents:
-    ner_tokens.append(f"{ent.text}: {ent.label_}")
-print("NER Results: ")
+# INS. COMM. Named-Entity Recognition 
+ner_tokens = [f"{ent.text}: {ent.label_}" for ent in doc.ents]
+print("NER Results:")
 print(ner_tokens)
 print("\n\n")
+
 
 #============================ Pre-Trained Model ==================================
 #INS. COMM. The following works with a pre-trained NLP pipeline
