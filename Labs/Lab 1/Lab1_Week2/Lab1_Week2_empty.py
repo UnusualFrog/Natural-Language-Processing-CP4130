@@ -4,20 +4,25 @@ import spacy
 from spacy.matcher import Matcher
 import requests
 
-# INS. COMM. Create a blank English NLP pipeline
+#INS. COMM. Observe the default natural language processing (NLP) pipeline
 nlp = spacy.blank("en")
 
-print("Pipeline components before adding anything:", nlp.pipe_names)
+print("Pipeline components:", nlp.pipe_names) #INS. COMM. Tokenizer is always available (even if the output shows blank)
 
-# INS. COMM. Add untrained components
+#INS. COMM. HINT: Use the built-in add_pipe(...) command, which is a method of the Language object created by spacy.blank("en")
+#INS. COMM. HINT: You can use the built-in pipe_names command (a method of the Language object created by spacy.blank("en")) to view the current NLP pipeline
+#INS. COMM. GOAL: Add in the following components of the NLP pipeline
+#INS. COMM.        - PoS-tagging
 tagger = nlp.add_pipe("tagger")
+#INS. COMM.        - Parser
 parser = nlp.add_pipe("parser")
+#INS. COMM.        - Named-entity recognition
 ner = nlp.add_pipe("ner")
 
 print("Pipeline components after adding pipes:", nlp.pipe_names)
 print()
 
-#NOTE: Added dummy labels so spaCy will not crash
+#NOTE: Added dummy labels so spacy will not crash
 tagger.add_label("NOUN")
 parser.add_label("dep")
 ner.add_label("PERSON")
@@ -28,25 +33,33 @@ nlp.initialize()
 text = "On a foggy Tuesday morning, Eleanor Whitmore met Daniel Alvarez outside the old Briarwood Train Station in Portsmouth, New Hampshire, clutching a leather-bound notebook and a chipped blue ceramic mug."
 doc = nlp(text)
 
-# INS. COMM. Tokenization
+#INS. COMM. GOAL: Test each component and observe their results (if the results are blank, then please explain why). The following components you are considering are:
+#INS. COMM.        - Tokenization
 tokens = [token.text for token in doc]
 print("Tokenization Results:")
 print(tokens)
 print()
 
-# INS. COMM. POS tagging 
+#INS. COMM.        - PoS-tagging
+# token.pos__ prints blank because spacy.blank("en") is a blank model 
+# with no POS library to reference for different speech part types
 pos_tokens = [f"{token.text}: {token.pos_}" for token in doc]
 print("POS Results:")
 print(pos_tokens)
 print()
 
-# INS. COMM. Dependency parsing 
+#INS. COMM.        - Parsing
+# Parser fails to correctly parse the tokens due to the empty model 
+# lacking the vocabulary normally provided to the parser by a pre-trained model such as en_core_web_sm
+# resulting in most tokens being incorrectly identified as conj
 parsed_tokens = [f"{token.text}: {token.tag_}, {token.dep_}" for token in doc]
 print("Parsing Results:")
 print(parsed_tokens)
 print()
 
-# INS. COMM. Named-Entity Recognition 
+#INS. COMM.        - Named-Entity Recognition
+# NER fails to produce meaningful results as it requires statistical 
+# data from a trained model to properly associate tokens with their entity types
 ner_tokens = [f"{ent.text}: {ent.label_}" for ent in doc.ents]
 print("NER Results:")
 print(ner_tokens)
