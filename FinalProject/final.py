@@ -1,8 +1,6 @@
 import re
-import string
 import numpy as np
 import pandas as pd
-from num2words import num2words
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -11,9 +9,8 @@ from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 import nltk
-from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
 from scipy.sparse import hstack
 
 # Do not truncate display of head
@@ -23,22 +20,25 @@ pd.options.display.max_rows = None
 # Download NLTK libraries
 nltk.download('punkt_tab')
 nltk.download('stopwords')
+nltk.download('wordnet')
 
-def clean_text(text):
-    # print(text)
-    text = text.lower()  # Lowercase
-    text = re.sub(r'\d+', lambda match: num2words(int(match.group())), text)  # Convert numbers to text representations
-    text = text.translate(str.maketrans('', '', string.punctuation))  # Remove punctuation
-    text = re.sub(r'\W', ' ', text)  # Remove special characters
-    return text
+# Initialize stopwords and lemmatizer
+stop_words = set(stopwords.words("english"))
+lemmatizer = WordNetLemmatizer()
 
-def clean_title(text):
-    text = text.lower()  # Lowercase
-    text = re.sub(r'\d+', lambda match: num2words(int(match.group())), text)  # Convert numbers to text representations
-    text = re.sub(r'[^\w\s]', ' ', text)  # Replace punctuation with whitespace
-    text = re.sub(r'\W', ' ', text)  # Remove special characters
-    text = " ".join(text.split()) # Normalize whitespace
-    return text
+def preprocess(text):
+    # clean text
+    text = text.lower()
+    text = re.sub(r'\d+', ' ', text)
+    text = re.sub(r'[^\w\s]', ' ', text)
+    # tokenize
+    tokens = text.split()
+    # stop word removal
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 2]
+    # lemmatize
+    tokens = [lemmatizer.lemmatize(t) for t in tokens]
+
+    return " ".join(tokens)
 
 def genius_lookup(text):
     pass
@@ -54,8 +54,12 @@ def main():
     
     # Remove non-english languages
     # print(df["language"].count())
-    rows = df[df["language"] != "en"].index
-    df.drop(rows, inplace=True)
+    rows_non_eng = df[df["language"] != "en"].index
+    df.drop(rows_non_eng, inplace=True)
+
+    # Remove song which are genre "latin" as they contain non-english lyrics
+    rows_latin = df[df["playlist_genre"] == "latin"].index
+    df.drop(rows_latin, inplace=True)
     # print(df["language"].count())
 
     # Remove rows with NaN lyrics
@@ -74,9 +78,9 @@ def main():
     # print(df_target.head())
 
     # Check class balance
-    # class_counts = df["playlist_genre"].value_counts()
-    # for k,v in class_counts.items():
-    #     print(k, round((v/df.shape[0])*100, 2))
+    class_counts = df["playlist_genre"].value_counts()
+    for k,v in class_counts.items():
+        print(k, round((v/df.shape[0])*100, 2))
 
     # 70%/30% train/test split with stratification to account for moderate class imbalance 
     X_train, X_test, y_train, y_test = train_test_split(df_features, df_target, random_state=42, test_size=0.3, stratify=df_target)
@@ -84,80 +88,45 @@ def main():
     # print(X_train.head())
     # print(X_test.head())
 
-    # Clean data to remove convert to lowercase, convert numbers to words, remove punctuation and remove special characters
+    # Clean data to remove convert to lowercase, remove numbers, remove punctuation and remove special characters
     X_train_clean = X_train.copy()
-    X_train_clean["lyrics"] = [clean_text(lyric) for lyric in X_train["lyrics"]]
-    X_train_clean["track_name"] = [clean_title(title) for title in X_train["track_name"]]
+    X_train_clean["lyrics"] = [preprocess(lyric) for lyric in X_train["lyrics"]]
 
     X_test_clean = X_test.copy()
-    X_test_clean["lyrics"] = [clean_text(lyric) for lyric in X_test["lyrics"]]
-    X_test_clean["track_name"] = [clean_title(title) for title in X_test["track_name"]]
+    X_test_clean["lyrics"] = [preprocess(lyric) for lyric in X_test["lyrics"]]
 
     # print(X_train_clean.head())
     # print(X_test_clean.head())
 
-    # Tokenize data
-    X_train_token = X_train_clean.copy()
-    X_test_token = X_test_clean.copy()
-
-    X_train_token["lyrics"] = [word_tokenize(lyric) for lyric in X_train_token["lyrics"]]
-    X_test_token["lyrics"] = [word_tokenize(lyric) for lyric in X_test_token["lyrics"]]
-
-    # print(X_train_token.head())
-    # print(X_test_token.head())
-
-    # Optional Stop Word Removal
-    stop_words = set(stopwords.words('english'))
-    X_train_stop = X_train_token.copy()
-    X_test_stop = X_test_token.copy()
-
-    # X_train_stop["lyrics"] = [word for word in X_train_stop["lyrics"] if word not in stop_words]
-    # X_test_stop["lyrics"] = [word for word in X_test_stop["lyrics"] if word not in stop_words]
-    X_train_stop["lyrics"] = X_train_stop["lyrics"].apply(lambda row: [word for word in row if word not in stop_words])
-    X_test_stop["lyrics"] = X_test_stop["lyrics"].apply(lambda row: [word for word in row if word not in stop_words])
-
-    # print(X_train_stop.head())
-    # print(X_test_stop.head())
-
-    # Stemming
-    porter_stemmer = PorterStemmer()
-    X_train_stem = X_train_token.copy()
-    X_test_stem = X_test_token.copy()
-
-    X_train_stem["lyrics"] = X_train_stem["lyrics"].apply(lambda row: [porter_stemmer.stem(word) for word in row])
-    X_test_stem["lyrics"] = X_test_stem["lyrics"].apply(lambda row: [porter_stemmer.stem(word) for word in row])
-
-    # Re-join tokens for TF-IDF consumption
-    X_train_stem["lyrics"] = X_train_stem["lyrics"].apply(" ".join)
-    X_test_stem["lyrics"] = X_test_stem["lyrics"].apply(" ".join)
-
-    # print(X_train_stem.head())
-    # print(X_test_stem.head())
-
     #TF-IDF
-    # Unigrams with more than 1 occurance
-    title_vectorizer = TfidfVectorizer(
-        ngram_range=(1,1),
-        min_df=2,
-        lowercase=False
-    )
-    # Unigrams and bigrams with more than 4 occurances
-    lyrics_vectorizer = TfidfVectorizer(
+    tfidf_title = TfidfVectorizer(
+        lowercase=True,
         ngram_range=(1,2),
-        min_df=5,
-        lowercase=False
+        min_df=3,
+        max_df=0.9,
+        sublinear_tf=True
     )
 
-    X_train_title = title_vectorizer.fit_transform(X_train_stem["track_name"])
-    X_train_lyrics = lyrics_vectorizer.fit_transform(X_train_stem["lyrics"])
+    tfidf_lyrics = TfidfVectorizer(
+        lowercase=True,
+        ngram_range=(1,3),
+        min_df=3,
+        max_df=0.85,
+        sublinear_tf=True,
+        max_features=100000
+    )
+
+    X_train_title = tfidf_title.fit_transform(X_train_clean["track_name"])
+    X_train_lyrics = tfidf_lyrics.fit_transform(X_train_clean["lyrics"])
     X_train_combined = hstack([X_train_title, X_train_lyrics])
 
-    X_test_title = title_vectorizer.transform(X_test_stem["track_name"])
-    X_test_lyrics = lyrics_vectorizer.transform(X_test_stem["lyrics"])
+    X_test_title = tfidf_title.transform(X_test_clean["track_name"])
+    X_test_lyrics = tfidf_lyrics.transform(X_test_clean["lyrics"])
     X_test_combined = hstack([X_test_title, X_test_lyrics])
 
     # Model Training
     lr = LogisticRegression(max_iter=10000, solver="saga", class_weight="balanced")
+    print("========== Training Logistic Regression ==========")
     lr.fit(X_train_combined, y_train)
     lr_pred = lr.predict(X_test_combined)
 
@@ -166,31 +135,30 @@ def main():
     class_prior = (1 / class_counts) / (1 / class_counts).sum()
 
     nb = MultinomialNB(alpha=1.0, class_prior=class_prior.tolist())
+    print("========== Training Naive Bayes ==========")
     nb.fit(X_train_combined, y_train)
     nb_pred = nb.predict(X_test_combined)
 
-    svm = LinearSVC( C=1, max_iter=10000, class_weight="balanced")
+    svm = LinearSVC( C=0.1, max_iter=10000, class_weight="balanced")
+    print("========== Training SVM ==========")
     svm.fit(X_train_combined, y_train)
     svm_pred = svm.predict(X_test_combined)
 
     rf = RandomForestClassifier(n_estimators=100, class_weight="balanced")
+    print("========== Training Random Forest ==========")
     rf.fit(X_train_combined, y_train)
     rf_pred = rf.predict(X_test_combined)
 
     # Evaluation
-    target_names = df_target.unique().tolist()
-    lr_class_report = classification_report(y_test, lr_pred, target_names=target_names)
-    nb_class_report = classification_report(y_test, nb_pred, target_names=target_names)
-    svm_class_report = classification_report(y_test, svm_pred, target_names=target_names)
-    rf_class_report = classification_report(y_test, rf_pred, target_names=target_names)
+    lr_class_report = classification_report(y_test, lr_pred, labels=lr.classes_)
+    nb_class_report = classification_report(y_test, nb_pred, labels=nb.classes_)
+    svm_class_report = classification_report(y_test, svm_pred, labels=svm.classes_)
+    rf_class_report = classification_report(y_test, rf_pred, labels=rf.classes_)
 
     print(lr_class_report)
     print(nb_class_report)
     print(svm_class_report)
     print(rf_class_report)
-
-
-
 
 if __name__ == "__main__":
     main()
