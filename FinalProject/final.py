@@ -1,12 +1,12 @@
-import pandas as pd
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
 import re
 import string
+import numpy as np
+import pandas as pd
 from num2words import num2words
-from nltk.tokenize import word_tokenize
+from sklearn.model_selection import train_test_split
 import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 
 # Do not truncate display of head
 pd.options.display.max_columns = None
@@ -14,6 +14,7 @@ pd.options.display.max_rows = None
 
 # Download NLTK libraries
 nltk.download('punkt_tab')
+nltk.download('stopwords')
 
 def clean_text(text):
     # print(text)
@@ -21,6 +22,14 @@ def clean_text(text):
     text = re.sub(r'\d+', lambda match: num2words(int(match.group())), text)  # Convert numbers to text representations
     text = text.translate(str.maketrans('', '', string.punctuation))  # Remove punctuation
     text = re.sub(r'\W', ' ', text)  # Remove special characters
+    return text
+
+def clean_title(text):
+    text = text.lower()  # Lowercase
+    text = re.sub(r'\d+', lambda match: num2words(int(match.group())), text)  # Convert numbers to text representations
+    text = re.sub(r'[^\w\s]', ' ', text)  # Replace punctuation with whitespace
+    text = re.sub(r'\W', ' ', text)  # Remove special characters
+    text = " ".join(text.split()) # Normalize whitespace
     return text
 
 def main():
@@ -47,11 +56,7 @@ def main():
     #     print(col, df[col].isna().sum())
     
     # Select relevant training and target features
-    df_features = df[
-        ["track_name", "track_artist", "lyrics", "danceability",
-            "energy", "key", "loudness", "mode", "speechiness", "acousticness",
-            "instrumentalness", "liveness", "valence", "tempo", "duration_ms", "language"]
-        ]
+    df_features = df[["track_name", "lyrics"]]
     df_target = df["playlist_genre"]
 
     # print(df_features.head())
@@ -65,18 +70,20 @@ def main():
     # 70%/30% train/test split with stratification to account for moderate class imbalance 
     X_train, X_test, y_train, y_test = train_test_split(df_features, df_target, random_state=42, test_size=0.3, stratify=df_target)
 
-    # print(X_train.head(20))
-    # print(X_test.head(20))
+    # print(X_train.head())
+    # print(X_test.head())
 
     # Clean data to remove convert to lowercase, convert numbers to words, remove punctuation and remove special characters
     X_train_clean = X_train.copy()
     X_train_clean["lyrics"] = [clean_text(lyric) for lyric in X_train["lyrics"]]
+    X_train_clean["track_name"] = [clean_title(title) for title in X_train["track_name"]]
 
     X_test_clean = X_test.copy()
     X_test_clean["lyrics"] = [clean_text(lyric) for lyric in X_test["lyrics"]]
+    X_test_clean["track_name"] = [clean_title(title) for title in X_test["track_name"]]
 
-    # print(X_train_clean.head(20))
-    # print(X_test_clean.head(20))
+    # print(X_train_clean.head())
+    # print(X_test_clean.head())
 
     # Tokenize data
     X_train_token = X_train_clean.copy()
@@ -87,6 +94,14 @@ def main():
 
     # print(X_train_token.head())
     # print(X_test_token.head())
+
+    # Optional Stop Word Removal
+    X_train_stop = X_train_token.copy()
+    X_test_stop = X_test_token.copy()
+
+    # Lemmatize
+    X_train_lem = X_train_token.copy()
+    X_test_lem = X_test_token.copy()
 
 
 
