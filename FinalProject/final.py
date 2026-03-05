@@ -1,7 +1,7 @@
 import re
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
@@ -116,38 +116,84 @@ def main():
         max_features=100000
     )
 
+    # character-level n-grams
+    tfidf_char = TfidfVectorizer(
+        analyzer="char_wb",  
+        ngram_range=(3, 5),
+        min_df=3,
+        max_df=0.9,
+        sublinear_tf=True,
+        max_features=50000
+    )
+
     X_train_title = tfidf_title.fit_transform(X_train_clean["track_name"])
     X_train_lyrics = tfidf_lyrics.fit_transform(X_train_clean["lyrics"])
-    X_train_combined = hstack([X_train_title, X_train_lyrics])
+    X_train_char = tfidf_char.fit_transform(X_train_clean["lyrics"])
+    X_train_combined = hstack([X_train_title, X_train_lyrics, X_train_char])
 
     X_test_title = tfidf_title.transform(X_test_clean["track_name"])
     X_test_lyrics = tfidf_lyrics.transform(X_test_clean["lyrics"])
-    X_test_combined = hstack([X_test_title, X_test_lyrics])
+    X_test_char = tfidf_char.transform(X_test_clean["lyrics"])
+    X_test_combined = hstack([X_test_title, X_test_lyrics, X_test_char])
+
+    # Cross Validation Parameters 
+    cv = 5
+    param_grid_lr = {
+        "C": [0.01, 0.1, 1, 10],
+        "l1_ratio": [0.0, 1.0]
+    }
+
+    param_grid_nb = {
+        "alpha": [0.1, 0.5, 1.0, 2.0]
+    }
+
+    param_grid_svm = {
+        "C": [0.01, 0.1, 1, 10]
+    }
+
+    param_grid_rf = {
+        "n_estimators": [100, 200],
+        "max_depth": [None, 10, 20],
+        "min_samples_split": [2, 5]
+    }
 
     # Model Training
-    lr = LogisticRegression(max_iter=10000, solver="saga", class_weight="balanced")
+    lr = GridSearchCV(
+        LogisticRegression(max_iter=10000, solver="saga", class_weight="balanced"),
+        param_grid_lr, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
+    )
     print("========== Training Logistic Regression ==========")
     lr.fit(X_train_combined, y_train)
     lr_pred = lr.predict(X_test_combined)
+    print("LR Best Params:", lr.best_params_, "| Best CV Score:", round(lr.best_score_, 4))
 
-    # Calculate class inverse frequency for weighting of NB classes
-    class_counts = df_target.value_counts().sort_index()
-    class_prior = (1 / class_counts) / (1 / class_counts).sum()
 
-    nb = MultinomialNB(alpha=1.0, class_prior=class_prior.tolist())
+    nb = GridSearchCV(
+        MultinomialNB(),
+        param_grid_nb, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
+    )
     print("========== Training Naive Bayes ==========")
     nb.fit(X_train_combined, y_train)
     nb_pred = nb.predict(X_test_combined)
+    print("NB Best Params:", nb.best_params_, "| Best CV Score:", round(nb.best_score_, 4))
 
-    svm = LinearSVC( C=0.1, max_iter=10000, class_weight="balanced")
+    svm = GridSearchCV(
+        LinearSVC(max_iter=10000, class_weight="balanced"),
+        param_grid_svm, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
+    )
     print("========== Training SVM ==========")
     svm.fit(X_train_combined, y_train)
     svm_pred = svm.predict(X_test_combined)
+    print("SVM Best Params:", svm.best_params_, "| Best CV Score:", round(svm.best_score_, 4))
 
-    rf = RandomForestClassifier(n_estimators=100, class_weight="balanced")
+    rf = RandomizedSearchCV(
+        RandomForestClassifier(class_weight="balanced"),
+        param_grid_rf, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
+    )
     print("========== Training Random Forest ==========")
     rf.fit(X_train_combined, y_train)
     rf_pred = rf.predict(X_test_combined)
+    print("RF Best Params:", rf.best_params_, "| Best CV Score:", round(rf.best_score_, 4))
 
     # Evaluation
     lr_class_report = classification_report(y_test, lr_pred, labels=lr.classes_)
