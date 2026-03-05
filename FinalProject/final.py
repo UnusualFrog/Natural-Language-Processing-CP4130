@@ -1,7 +1,7 @@
 import re
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
@@ -158,42 +158,30 @@ def main():
     }
 
     # Model Training
-    lr = GridSearchCV(
-        LogisticRegression(max_iter=10000, solver="saga", class_weight="balanced"),
-        param_grid_lr, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
-    )
+    lr = LogisticRegression(max_iter=10000, solver="saga", class_weight="balanced", C=1, l1_ratio=0.0)
     print("========== Training Logistic Regression ==========")
     lr.fit(X_train_combined, y_train)
     lr_pred = lr.predict(X_test_combined)
-    print("LR Best Params:", lr.best_params_, "| Best CV Score:", round(lr.best_score_, 4))
 
+    # Calculate class inverse frequency for weighting of NB classes
+    # NOTE: possibly remove?
+    class_counts = df_target.value_counts().sort_index()
+    class_prior = (1 / class_counts) / (1 / class_counts).sum()
 
-    nb = GridSearchCV(
-        MultinomialNB(),
-        param_grid_nb, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
-    )
+    nb = MultinomialNB(alpha=0.1, class_prior=class_prior.tolist())
     print("========== Training Naive Bayes ==========")
     nb.fit(X_train_combined, y_train)
     nb_pred = nb.predict(X_test_combined)
-    print("NB Best Params:", nb.best_params_, "| Best CV Score:", round(nb.best_score_, 4))
 
-    svm = GridSearchCV(
-        LinearSVC(max_iter=10000, class_weight="balanced"),
-        param_grid_svm, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
-    )
+    svm = LinearSVC( C=0.1, max_iter=10000, class_weight="balanced")
     print("========== Training SVM ==========")
     svm.fit(X_train_combined, y_train)
     svm_pred = svm.predict(X_test_combined)
-    print("SVM Best Params:", svm.best_params_, "| Best CV Score:", round(svm.best_score_, 4))
 
-    rf = RandomizedSearchCV(
-        RandomForestClassifier(class_weight="balanced"),
-        param_grid_rf, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1
-    )
+    rf = RandomForestClassifier(n_estimators=200, class_weight="balanced", min_samples_split=2, max_depth=20)
     print("========== Training Random Forest ==========")
     rf.fit(X_train_combined, y_train)
     rf_pred = rf.predict(X_test_combined)
-    print("RF Best Params:", rf.best_params_, "| Best CV Score:", round(rf.best_score_, 4))
 
     # Evaluation
     lr_class_report = classification_report(y_test, lr_pred, labels=lr.classes_)
