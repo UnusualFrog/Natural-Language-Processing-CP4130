@@ -15,29 +15,22 @@ nltk.download('wordnet')
 stop_words = set(stopwords.words("english"))
 lemmatizer = WordNetLemmatizer()
 
+# Genius API 
 TOKEN = "1Y4W8rda4lIgTZL8djnafAnIrZqH-YsiyxVRmdx7Cii1m_h5XO-uWzwjxhnRZZVl"
 GENIUS = lyricsgenius.Genius(TOKEN)
 MODEL_PATH = "models"
-1
-# artist = genius.search_artist("Gorillaz", max_songs=3, sort="title")
-# print(artist.songs)
 
-# song = genius.search_song(title="Dumb Litty")
-
-# print(song)
-
-# for k,v in song.items():
-#     print(k,v)
-
+# Apply pre-processing to text data to convert to lowercase, remove special characters and stopwords and lemmatize words
 def preprocess(text):
     text = text.lower()
     text = re.sub(r'\d+', ' ', text)
     text = re.sub(r'[^\w\s]', ' ', text)
     tokens = text.split()
-    tokens = [t for t in tokens if t not in stop_words and len(t) > 2]
+    tokens = [t for t in tokens if t not in stop_words]
     tokens = [lemmatizer.lemmatize(t) for t in tokens]
     return " ".join(tokens)
 
+# Load saved models and vocabularies
 def load_models():
     models = {
         "lr": joblib.load(f"{MODEL_PATH}/lr.joblib"),
@@ -52,15 +45,14 @@ def load_models():
     }
     return models, vectorizers
 
-def predict_new_song(song):
-    # Load pre-trained models and vectorizer
-    models, vecs = load_models()
-
+def predict_new_song(song, models, vecs):
+    # Preprocess data
     clean_lyrics = preprocess(song.lyrics)
 
     # print(dir(song))
     print(song.full_title)
 
+    # Transform unseen data to match pre-trained vocabulary
     title_vec = vecs["tfidf_title"].transform([song.full_title])
     lyrics_vec = vecs["tfidf_lyrics"].transform([clean_lyrics])
     char_vec = vecs["tfidf_char"].transform([clean_lyrics])
@@ -80,23 +72,36 @@ def predict_new_song(song):
         print(f"{name}: {prediction} ({confidence:.2%})")
 
 def main():
+    models, vecs = load_models()
+    
+    # Text UI for predicting new data
     while True:
         print("Select an option")
         print("0. Exit Program")
         print("1. Predict new song")
         res = input()
 
+        # Exit system
         if res == "0":
             break
-
+        
+        # Predict new song
         if res == "1":
-            print("Please enter the title of a song: ")
+            print("Please enter the title of a song (and optionally the artist name): ")
             song_name = str(input())
             song_name = song_name.strip()
+
+            # Handle empty input
+            if not song_name:
+                print("Error: Please enter a song name")
+                continue
+
             song = GENIUS.search_song(title=song_name)
             print("Founds Song: ", song)
+
+            # Predict on new song if found
             if song is not None:
-                predict_new_song(song)
+                predict_new_song(song, models, vecs)
             else:
                 print("Error: Song not found")
         else:
